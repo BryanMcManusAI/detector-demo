@@ -23,6 +23,36 @@ python3 detector_demo.py     # standard library only, no install, deterministic
    re-read by hand than the whole corpus. Re-reading it sorts wrong labels from the detector's
    own misses — and audits your gold in the process.
 
+## Gate a data batch in CI
+
+`--gate` turns the detector into a **pass/fail check with a real exit code**, so it drops straight
+into a data pipeline or pre-merge hook and *blocks a batch from training when too much of it is bad*:
+
+```bash
+python3 detector_demo.py --gate --max-bad-rate 0.20 --quiet
+# exits 1 (fails the build) if the detector flags more than 20% of the batch as bad data
+```
+
+In GitHub Actions — no install, it's stdlib:
+
+```yaml
+# .github/workflows/dataquality-gate.yml
+name: data-quality gate
+on: [push, pull_request]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python3 detector_demo.py --gate --max-bad-rate 0.20 --quiet
+```
+
+Drop that file into `.github/workflows/` and it runs on every push (the synthetic batch is ~40% bad
+by construction, so it clears a 0.50 ceiling but would fail a real 0.20 bar — point `--max-bad-rate`
+at your own batch and threshold to gate real collection).
+
 ## What this is *not*
 
 This is a **clean-room reconstruction from the publicly described approach.** It contains:

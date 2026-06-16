@@ -21,9 +21,11 @@ What it shows, end to end:
      audited by the model, not the other way around.
 """
 from __future__ import annotations
+import argparse
 import random
 import re
 import statistics
+import sys
 from dataclasses import dataclass, field
 
 RNG = random.Random(7)  # deterministic
@@ -218,12 +220,7 @@ def prf1(items, truth_attr="true_label"):
     return p, r, f1
 
 
-def main():
-    print(__doc__)
-    items = build_corpus()
-    for it in items:
-        score_item(it)
-
+def _report(items):
     print("=" * 70)
     print("STEP 1 — Detector vs. clean labels (synthetic ground truth)")
     print("=" * 70)
@@ -266,6 +263,36 @@ def main():
           f"\n  classic trap: the model looks broken because the labels are wrong. Re-checking"
           f"\n  the {len(disagreements)} disagreements by hand is one cheap pass that audits the gold.")
     print("\nDone. Method only; synthetic data only; no proprietary detail.")
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Bad-data detector method demo; optionally gate a data batch on its flagged bad-data rate.")
+    ap.add_argument("--gate", action="store_true",
+                    help="exit non-zero if the flagged bad-data rate exceeds the bar (drops into a data-pipeline / CI gate)")
+    ap.add_argument("--max-bad-rate", type=float, default=0.20,
+                    help="gate: max share of a batch the detector may flag as bad before the build fails (default 0.20)")
+    ap.add_argument("--quiet", action="store_true",
+                    help="suppress the narrative; print only the GATE verdict")
+    args = ap.parse_args()
+
+    items = build_corpus()
+    for it in items:
+        score_item(it)
+
+    if not args.quiet:
+        print(__doc__)
+        _report(items)
+
+    if args.gate:
+        bad = sum(it.predicted == "VACUOUS" for it in items)
+        rate = bad / len(items)
+        if rate > args.max_bad_rate:
+            print(f"\nGATE: FAIL — flagged bad-data rate {rate:.0%} > max {args.max_bad_rate:.0%}"
+                  f"  → blocking the batch from training.")
+            sys.exit(1)
+        print(f"\nGATE: PASS — flagged bad-data rate {rate:.0%} ≤ max {args.max_bad_rate:.0%}.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
