@@ -1,0 +1,17 @@
+name: data-quality gate
+on: [push, pull_request]
+
+# Demonstrates the detector as a data-pipeline gate: a build step that fails when too
+# much of a batch is flagged as bad data. The synthetic demo batch is ~40% bad by
+# construction, so it clears a 0.50 ceiling but would fail a real 0.20 bar. Point
+# --max-bad-rate at your own batch and threshold to block real collection.
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Gate the batch on flagged bad-data rate
+        run: python3 detector_demo.py --gate --max-bad-rate 0.50 --quiet
